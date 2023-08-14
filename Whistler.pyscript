@@ -1,0 +1,142 @@
+"""
+An unperfect solution for melodic insiration generation
+"""
+import flpianoroll as flp
+import time
+
+PPQ = flp.score.PPQ
+MIDDLE_C = 48
+LENGTH_LIST = "4,8"
+MODE_LIST = "Major,Minor"
+KEY_LIST = "C,C#,D,D#,E,F,F#,G,G#,A,A#,B"
+NUM_OF_BARS = [4, 8]
+NOTE_LENGTH_WEIGHTS = [0.05, 0.3, 0.35, 0.25, 0.05]
+MAJOR = {
+    "C": MIDDLE_C,
+    "D": MIDDLE_C + 2,
+    "E": MIDDLE_C + 4,
+    "F": MIDDLE_C + 5,
+    "G": MIDDLE_C + 7,
+    "A": MIDDLE_C + 9,
+    "B": MIDDLE_C + 11,
+}
+MINOR = {
+    "C": MIDDLE_C,
+    "D": MIDDLE_C + 2,
+    "D#": MIDDLE_C + 3,
+    "F": MIDDLE_C + 5,
+    "G": MIDDLE_C + 7,
+    "G#": MIDDLE_C + 8,
+    "A#": MIDDLE_C + 10,
+}
+
+TICKS = {
+    "16": int(PPQ / 4),
+    "8": int(PPQ / 2),
+    "4": int(PPQ),
+    "2": int(PPQ * 2),
+    "1": int(PPQ * 4),
+}
+
+
+# ==================== Utility Functions ==================== #
+def rand_num(minimum, maximum):
+    now = str(time.perf_counter())
+    rnd = float(now[::-1][:3:]) / 1000
+    return int(minimum + rnd * (maximum - minimum))
+
+
+def weighted_random(weights):
+    total_weight = sum(weights)
+    rnd = rand_num(0, total_weight * 10) / 10
+    cumulative_weight = 0
+    for i, weight in enumerate(weights):
+        cumulative_weight += weight
+        if rnd <= cumulative_weight:
+            return i
+
+
+def make_note(note_num: int, length: int, start_time: int):
+    note = flp.Note()
+    note.number = note_num
+    note.time = start_time
+    note.length = length
+    note.group = 0
+    note.pan = 0.5
+    note.velocity = 0.8
+    note.color = 0
+    note.fcut = 0.5
+    note.fres = 0.5
+    note.pitchofs = 0
+    note.slide = False
+    note.porta = False
+    note.muted = False
+    note.selected = False
+    return note
+
+
+def write_sequence(note_weights, notes, key_offset, bars):
+    note_list = []
+    cursor = 0
+    ticks = list(TICKS.values())
+    melody_length = TICKS["4"] * 4 * NUM_OF_BARS[bars]
+    while cursor < melody_length:
+        note_num = notes[weighted_random(note_weights)]
+        note_len = ticks[weighted_random(NOTE_LENGTH_WEIGHTS)]
+        note = make_note(note_num + key_offset, note_len, cursor)
+        if cursor + note.length < melody_length:
+            note_list.append(note)
+        cursor += note.length
+    return note_list
+
+
+# ==================== Scripting Functions ==================== #
+
+
+def createDialog():
+    """
+    This creates the Dialog Box to control the tool.
+    """
+    form = flp.ScriptDialog("R12 industries", "Generate melody ideas")
+    form.AddInputCombo("Length in bars", LENGTH_LIST, 1)
+    form.AddInputCombo("Key", KEY_LIST, 1)
+    form.AddInputCombo("Mode", MODE_LIST, 1)
+    form.AddInputCombo("Octave", "4,5,6", 1)
+    form.AddInputKnob("Tonic", 0.3, 0, 0.9)
+    form.AddInputKnob("SuperTonic", 0.05, 0, 0.9)
+    form.AddInputKnob("Mediant", 0.15, 0, 0.9)
+    form.AddInputKnob("Subdominant", 0.2, 0, 0.9)
+    form.AddInputKnob("Dominant", 0.2, 0, 0.9)
+    form.AddInputKnob("Submediant", 0.05, 0, 0.9)
+    form.AddInputKnob("LeadingTone", 0.05, 0, 0.9)
+    return form
+
+
+def apply(form):
+    tonic = form.GetInputValue("Tonic")
+    supertonic = form.GetInputValue("SuperTonic")
+    mediant = form.GetInputValue("Mediant")
+    subdominant = form.GetInputValue("Subdominant")
+    dominant = form.GetInputValue("Dominant")
+    submediant = form.GetInputValue("Submediant")
+    leadingtone = form.GetInputValue("LeadingTone")
+    note_weights = [
+        tonic,
+        supertonic,
+        mediant,
+        subdominant,
+        dominant,
+        submediant,
+        leadingtone,
+    ]
+    key_offset = form.GetInputValue("Key")
+    mode = form.GetInputValue("Mode")
+    bars = form.GetInputValue("Length in bars")
+    octave_offset = form.GetInputValue("Octave") * 12
+    if mode == 0:
+        notes = list(MAJOR.values())
+    else:
+        notes = list(MINOR.values())
+    melody = write_sequence(note_weights, notes, key_offset + octave_offset, bars)
+    for note in melody:
+        flp.score.addNote(note)
