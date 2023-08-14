@@ -1,5 +1,5 @@
 """
-An unperfect solution for melodic insiration generation
+An imperfect solution for melodic insiration generation
 """
 import flpianoroll as flp
 import time
