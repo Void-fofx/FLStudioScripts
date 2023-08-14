@@ -9,7 +9,7 @@ MIDDLE_C = 48
 LENGTH_LIST = "4,8"
 MODE_LIST = "Major,Minor"
 KEY_LIST = "C,C#,D,D#,E,F,F#,G,G#,A,A#,B"
-NUM_OF_BARS = [4, 8]
+NUM_OF_MEASURES = [4, 8]
 NOTE_LENGTH_WEIGHTS = [0.05, 0.3, 0.35, 0.25, 0.05]
 MAJOR = {
     "C": MIDDLE_C,
@@ -75,11 +75,16 @@ def make_note(note_num: int, length: int, start_time: int):
     return note
 
 
-def write_sequence(note_weights, notes, key_offset, bars):
+def write_sequence(note_weights, notes, key_offset, measures, short_stems):
+    if short_stems:
+        short = 2
+    else:
+        short = 1
+
     note_list = []
     cursor = 0
     ticks = list(TICKS.values())
-    melody_length = TICKS["4"] * 4 * NUM_OF_BARS[bars]
+    melody_length = TICKS["4"] * 4 / short * NUM_OF_MEASURES[measures]
     while cursor < melody_length:
         note_num = notes[weighted_random(note_weights)]
         note_len = ticks[weighted_random(NOTE_LENGTH_WEIGHTS)]
@@ -97,8 +102,9 @@ def createDialog():
     """
     This creates the Dialog Box to control the tool.
     """
-    form = flp.ScriptDialog("R12 industries", "Generate melody ideas")
-    form.AddInputCombo("Length in bars", LENGTH_LIST, 1)
+    form = flp.ScriptDialog("Whistler", "Generate melody ideas")
+    form.AddInputCombo("LenInMeasures", LENGTH_LIST, 1)
+    form.AddInputCheckbox("Short Stems", False)
     form.AddInputCombo("Key", KEY_LIST, 1)
     form.AddInputCombo("Mode", MODE_LIST, 1)
     form.AddInputCombo("Octave", "4,5,6", 1)
@@ -120,6 +126,7 @@ def apply(form):
     dominant = form.GetInputValue("Dominant")
     submediant = form.GetInputValue("Submediant")
     leadingtone = form.GetInputValue("LeadingTone")
+    short_stems = form.GetInputValue("Short Stems")
     note_weights = [
         tonic,
         supertonic,
@@ -131,12 +138,14 @@ def apply(form):
     ]
     key_offset = form.GetInputValue("Key")
     mode = form.GetInputValue("Mode")
-    bars = form.GetInputValue("Length in bars")
+    measures = form.GetInputValue("LenInMeasures")
     octave_offset = form.GetInputValue("Octave") * 12
     if mode == 0:
         notes = list(MAJOR.values())
     else:
         notes = list(MINOR.values())
-    melody = write_sequence(note_weights, notes, key_offset + octave_offset, bars)
+    melody = write_sequence(
+        note_weights, notes, key_offset + octave_offset, measures, short_stems
+    )
     for note in melody:
         flp.score.addNote(note)
