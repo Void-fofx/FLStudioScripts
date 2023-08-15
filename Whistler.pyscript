@@ -6,11 +6,18 @@ import time
 
 PPQ = flp.score.PPQ
 MIDDLE_C = 48
-LENGTH_LIST = "4,8"
 MODE_LIST = "Major,Minor"
 KEY_LIST = "C,C#,D,D#,E,F,F#,G,G#,A,A#,B"
-NUM_OF_MEASURES = [4, 8]
-NOTE_LENGTH_WEIGHTS = [0.05, 0.3, 0.35, 0.25, 0.05]
+
+# Expand this list to include more patterns
+MELODY_TEMPLATES = [
+    [0, 1, 2, 3], # 4 random stems
+    [0, 1, 0, 1], # 2 stems repeated
+    [0, 0, 1, 1], # 2 stems repeated then two new stems
+    [0, 1, 2, 0], # 3 random stems then repeat 1st
+    [0, 0, 2, 3],
+    [0, 1, 0, 3],
+]
 MAJOR = {
     "C": MIDDLE_C,
     "D": MIDDLE_C + 2,
@@ -71,28 +78,67 @@ def make_note(note_num: int, length: int, start_time: int):
     note.slide = False
     note.porta = False
     note.muted = False
-    note.selected = False
+    note.selected = True
     return note
 
 
-def write_sequence(note_weights, notes, key_offset, measures, short_stems):
-    if short_stems:
-        short = 2
-    else:
-        short = 1
-
+def write_sequence(note_weights, notes, key_offset, length_weights):
     note_list = []
     cursor = 0
     ticks = list(TICKS.values())
-    melody_length = TICKS["4"] * 4 / short * NUM_OF_MEASURES[measures]
+    melody_length = TICKS["1"]
     while cursor < melody_length:
         note_num = notes[weighted_random(note_weights)]
-        note_len = ticks[weighted_random(NOTE_LENGTH_WEIGHTS)]
+        note_len = ticks[weighted_random(length_weights)]
         note = make_note(note_num + key_offset, note_len, cursor)
         if cursor + note.length < melody_length:
             note_list.append(note)
         cursor += note.length
     return note_list
+
+
+def copy_note(note):
+    new_note = flp.Note()
+    new_note.number = note.number
+    new_note.time = note.time
+    new_note.length = note.length
+    new_note.group = note.group
+    new_note.pan = note.pan
+    new_note.velocity = note.velocity
+    new_note.color = note.color
+    new_note.fcut = note.fcut
+    new_note.fres = note.fres
+    new_note.pitchofs = note.pitchofs
+    new_note.slide = note.slide
+    new_note.porta = note.porta
+    new_note.muted = note.muted
+    new_note.selected = note.selected
+    return new_note
+
+
+def copy_stem(stem: list):
+    stem_copy = []
+    for note in stem:
+        stem_copy.append(copy_note(note))
+    return stem_copy
+
+
+def zero_stems(stem: list):
+    stem_copy = copy_stem(stem)
+    while stem[0].time > 0:
+        for note in stem:
+            note.time -= TICKS["1"]
+            if note.time < 0:
+                note.time = 0
+    return stem_copy
+
+def generate_pattern(stems, pattern):
+    for i, stem_pos in enumerate(pattern):
+        new_stem = copy_stem(stems[stem_pos])
+        new_notes = zero_stems(new_stem)
+        for note in new_notes:
+            note.time += TICKS["1"] * i
+            flp.score.addNote(note)
 
 
 # ==================== Scripting Functions ==================== #
@@ -103,11 +149,9 @@ def createDialog():
     This creates the Dialog Box to control the tool.
     """
     form = flp.ScriptDialog("Whistler", "Generate melody ideas")
-    form.AddInputCombo("LenInMeasures", LENGTH_LIST, 1)
-    form.AddInputCheckbox("Short Stems", False)
     form.AddInputCombo("Key", KEY_LIST, 1)
-    form.AddInputCombo("Mode", MODE_LIST, 1)
-    form.AddInputCombo("Octave", "4,5,6", 1)
+    form.AddInputCombo("Mode", MODE_LIST, 2)
+    form.AddInputCombo("Octave", "4,5,6", 2)
     form.AddInputKnob("Tonic", 0.3, 0, 0.9)
     form.AddInputKnob("SuperTonic", 0.05, 0, 0.9)
     form.AddInputKnob("Mediant", 0.15, 0, 0.9)
@@ -115,37 +159,46 @@ def createDialog():
     form.AddInputKnob("Dominant", 0.2, 0, 0.9)
     form.AddInputKnob("Submediant", 0.05, 0, 0.9)
     form.AddInputKnob("LeadingTone", 0.05, 0, 0.9)
+    form.AddInputKnob("sixteenths", 0.1, 0.0, 0.9)
+    form.AddInputKnob("eighths", 0.3, 0.4, 0.9)
+    form.AddInputKnob("quarters", 0.35, 0.4, 0.9)
+    form.AddInputKnob("halves", 0.2, 0.1, 0.9)
+    form.AddInputKnob("wholes", 0.05, 0.0, 0.9)
     return form
 
 
 def apply(form):
-    tonic = form.GetInputValue("Tonic")
-    supertonic = form.GetInputValue("SuperTonic")
-    mediant = form.GetInputValue("Mediant")
-    subdominant = form.GetInputValue("Subdominant")
-    dominant = form.GetInputValue("Dominant")
-    submediant = form.GetInputValue("Submediant")
-    leadingtone = form.GetInputValue("LeadingTone")
-    short_stems = form.GetInputValue("Short Stems")
-    note_weights = [
-        tonic,
-        supertonic,
-        mediant,
-        subdominant,
-        dominant,
-        submediant,
-        leadingtone,
+    GIV = lambda x: form.GetInputValue(x)
+
+    
+    note_len_weights = [
+        GIV("sixteenths"),
+        GIV("eighths"),
+        GIV("quarters"),
+        GIV("halves"),
+        GIV("wholes"),
     ]
-    key_offset = form.GetInputValue("Key")
-    mode = form.GetInputValue("Mode")
-    measures = form.GetInputValue("LenInMeasures")
-    octave_offset = form.GetInputValue("Octave") * 12
+    note_weights = [
+        GIV("Tonic"),
+        GIV("SuperTonic"),
+        GIV("Mediant"),
+        GIV("Subdominant"),
+        GIV("Dominant"),
+        GIV("Submediant"),
+        GIV("LeadingTone"),
+    ]
+    key_offset = GIV("Key")
+    mode = GIV("Mode")
+    octave_offset = GIV("Octave") * 12
     if mode == 0:
         notes = list(MAJOR.values())
     else:
         notes = list(MINOR.values())
-    melody = write_sequence(
-        note_weights, notes, key_offset + octave_offset, measures, short_stems
-    )
-    for note in melody:
-        flp.score.addNote(note)
+    stems = []  # list of four 1-bar phrases
+    for measure in range(0, 5):
+        stems.append(write_sequence(note_weights, notes, key_offset + octave_offset, note_len_weights))
+
+    random_pattern = rand_num(0, len(MELODY_TEMPLATES) - 1)
+    melody_pattern = MELODY_TEMPLATES[random_pattern]
+    flp.score.clearNotes(False)
+    generate_pattern(stems, melody_pattern)
